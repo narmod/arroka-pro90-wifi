@@ -70,7 +70,7 @@ L'appareil est découvert automatiquement :
   <img src="docs/images/motherboard_cn8.png" width="600" alt="Carte mère — connecteur CN8 en haut à gauche"/>
 </p>
 
-> Le connecteur **CN8** est visible en haut à gauche de la carte mère (ref. `1.35.1010095`).  
+> Le connecteur **CN8** est visible en bas à droite de la carte mère (ref. `1.35.1010095`).  
 > Il expose 4 bornes : **B, A, GND, +12V** (de gauche à droite).
 
 ### Schéma de connexion
