@@ -2,20 +2,49 @@
 
 Ajout du contrôle WiFi à une pompe à chaleur piscine **Arroka Pro 90** (ByPiscine, 2022) via un ESP32 connecté au bus RS485 de la carte mère, intégré dans **Home Assistant** via **ESPHome**.
 
-> Testé sur carte mère ref. `1.35.1010095` datée 2022-03-23.  
-> Probablement compatible avec d'autres PAC de la gamme ByPiscine / Pool Comfort pré-2023.
+> ✅ Testé sur carte mère ref. `1.35.1010095` datée `2022-03-23`  
+> 📌 Probablement compatible avec toutes les PAC ByPiscine / Pool Comfort **avant 2023** (sans WiFi intégré)
 
 ---
 
-## 📋 Sommaire
+## 🎯 Résultat
 
-- [Matériel nécessaire](#matériel-nécessaire)
-- [Câblage](#câblage)
-- [Protocole RS485 décodé](#protocole-rs485-décodé)
-- [Installation ESPHome](#installation-esphome)
-- [Résultat dans Home Assistant](#résultat-dans-home-assistant)
-- [Sketch Arduino de diagnostic](#sketch-arduino-de-diagnostic)
-- [FAQ](#faq)
+<p align="center">
+  <img src="docs/images/homeassistant_thermostat.png" width="220" alt="Thermostat HA"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/homeassistant_control.png" width="280" alt="Contrôle HA"/>
+</p>
+
+Contrôle complet depuis Home Assistant :
+- 🌡️ Température eau en temps réel
+- 🌬️ Température air extérieur
+- 🎯 Réglage de la consigne (15 à 32°C)
+- 🔥 Mode Chauffage / ❄️ Mode Refroidissement
+- ⏸️ ON / OFF
+
+---
+
+## ⚡ Installation rapide (sans compilation)
+
+> Si vous avez exactement le même matériel, vous pouvez flasher directement sans compiler.
+
+### 1. Flasher le firmware
+
+1. Branchez l'ESP32 en USB à votre ordinateur
+2. Ouvrez https://web.esphome.io dans Chrome/Edge
+3. Cliquez **"Connect"** → sélectionnez le port USB
+4. Cliquez **"Install"** → choisissez [`firmware/arroka-pac-factory.bin`](firmware/arroka-pac-factory.bin)
+5. Attendez ~2 minutes
+
+### 2. Configurer le WiFi
+
+Après le flash, un réseau WiFi **"Arroka Fallback"** apparaît.  
+Connectez-vous et entrez vos identifiants WiFi.
+
+### 3. Ajouter dans Home Assistant
+
+L'appareil est découvert automatiquement :  
+**Paramètres → Appareils et services → ESPHome → Configurer**
 
 ---
 
@@ -25,8 +54,8 @@ Ajout du contrôle WiFi à une pompe à chaleur piscine **Arroka Pro 90** (ByPis
 |-----------|-----------|------|
 | Microcontrôleur | ESP32-WROOM-32 (AZ-Delivery DevKit v4) | ~8€ |
 | Convertisseur RS485 | Module MAX485 | ~1€ |
-| Alimentation | Chargeur USB 5V/1A | ~5€ |
-| Câble | Micro-USB data+charge | ~3€ |
+| Alimentation | Chargeur USB 5V/**1A minimum** | ~5€ |
+| Câble | Micro-USB **data+charge** | ~3€ |
 | Fils | Dupont M/F | ~2€ |
 
 **Total : ~19€**
@@ -35,37 +64,49 @@ Ajout du contrôle WiFi à une pompe à chaleur piscine **Arroka Pro 90** (ByPis
 
 ## 🔌 Câblage
 
-Le connecteur **CN8** de la carte mère expose le bus RS485 :
+### Connecteur CN8 sur la carte mère
+
+<p align="center">
+  <img src="docs/images/motherboard_cn8.png" width="600" alt="Carte mère — connecteur CN8 en haut à gauche"/>
+</p>
+
+> Le connecteur **CN8** est visible en haut à gauche de la carte mère (ref. `1.35.1010095`).  
+> Il expose 4 bornes : **B, A, GND, +12V** (de gauche à droite).
+
+### Schéma de connexion
 
 ```
 PAC CN8          MAX485              ESP32 AZ-Delivery
 ──────────────────────────────────────────────────────
-A           →    A
-B           →    B
-GND         →    GND  ←──────────   GND
-+12V             ⚠️ NE PAS BRANCHER
+A           ───► A
+B           ───► B
+GND         ───► GND ◄────────────── GND
++12V             ⛔ NE PAS BRANCHER
 
-                 VCC  ←──────────   U5  (5V, en haut à droite)
-                 GND  ←──────────   GND
-                 DI   ←──────────   GPIO17 (TX2)
-                 RO   ────────────►  GPIO16 (RX2)
-                 DE+RE ←─────────   GPIO4
+                 VCC ◄────────────── U5  (5V — broche en haut à droite)
+                 GND ◄────────────── GND
+                 DI  ◄────────────── GPIO17 (TX2)
+                 RO  ─────────────►  GPIO16 (RX2)
+                 DE+RE ◄──────────── GPIO4
 ```
 
-> ⚠️ **IMPORTANT** : Ne jamais brancher le +12V de la PAC sur le MAX485.  
-> Le module MAX485 est alimenté en **5V** depuis la broche `U5` de l'ESP32.
+> ⚠️ **IMPORTANT** : Ne **jamais** brancher le +12V de la PAC sur le MAX485.  
+> Le MAX485 est alimenté en **5V** uniquement depuis la broche `U5` de l'ESP32.  
+> ⚠️ Coupez l'alimentation de la PAC avant de brancher les fils sur CN8.
 
 ---
 
 ## 📡 Protocole RS485 décodé
 
-### Paramètres
+> Section technique pour comprendre comment fonctionne l'intégration.
+
+### Paramètres de communication
 
 | Paramètre | Valeur |
 |-----------|--------|
 | Baudrate | **9600 bps** |
-| Format | 8N1 |
-| Longueur trame | **13 octets** |
+| Format | 8N1 (8 bits, pas de parité, 1 stop bit) |
+| Longueur trame | **13 octets fixes** |
 
 ### Structure d'une trame
 
@@ -74,29 +115,27 @@ GND         →    GND  ←──────────   GND
  ID  Teau Cons  ?    ?    ?    ?   FLAG  Teau  ?    ?   0x7F CRC
 ```
 
-| Byte | Trame | Valeur | Signification |
-|------|-------|--------|---------------|
-| [00] | toutes | `CC/CD/DD/D0/D2` | ID trame |
-| [01] | CC/CD | ex: `0x19` | Temp eau (octet interne, ne pas utiliser pour affichage) |
-| [01] | DD | ex: `0x11` = 17 | **Température eau mesurée** (°C) |
-| [02] | CC/CD | ex: `0x1C` = 28 | **Consigne température** (°C) |
-| [05] | DD | ex: `0x0F` = 15 | **Température air extérieur** (°C) |
-| [07] | CC/CD | voir tableau | **FLAG : ON/OFF + MODE** |
-| [08] | DD | `0x00`=arrêt / autre=marche | **État compresseur** |
-| [11] | toutes | `0x7F` | Marqueur fin de trame (fixe) |
+| Byte | Trame | Exemple | Signification |
+|------|-------|---------|---------------|
+| [00] | toutes | `CC/CD/DD` | Identifiant de trame |
+| [01] | DD | `0x11` = 17 | **Température eau mesurée** (°C) |
+| [02] | CC/CD | `0x1C` = 28 | **Consigne température** (°C) |
+| [05] | DD | `0x0F` = 15 | **Température air extérieur** (°C) |
+| [07] | CC/CD | voir ci-dessous | **FLAG : ON/OFF + MODE** |
+| [08] | DD | `0x00`=arrêt | **État compresseur** |
+| [11] | toutes | `0x7F` | Marqueur fin (fixe) |
 | [12] | toutes | calculé | **CRC** |
 
-### Tableau byte[07] — FLAG
+### Byte[07] — FLAG mode
 
 ```
-0x2C = 0010 1100  →  OFF + HEAT  (arrêt, mode chauffage)
-0x6C = 0110 1100  →  ON  + HEAT  (marche, mode chauffage)
-0x0C = 0000 1100  →  OFF + COOL  (arrêt, mode refroidissement)
-0x4C = 0100 1100  →  ON  + COOL  (marche, mode refroidissement)
+0x2C  →  PAC OFF + Mode CHAUFFAGE
+0x6C  →  PAC ON  + Mode CHAUFFAGE
+0x0C  →  PAC OFF + Mode REFROIDISSEMENT
+0x4C  →  PAC ON  + Mode REFROIDISSEMENT
 
 Bit 6 (0x40) : ON=1 / OFF=0
 Bit 5 (0x20) : HEAT=1 / COOL=0
-Bits 3+2 (0x0C) : fixes
 ```
 
 ### Calcul CRC
@@ -104,30 +143,28 @@ Bits 3+2 (0x0C) : fixes
 ```cpp
 uint8_t x = 0;
 for (int i = 0; i < 12; i++) x ^= frame[i];
-frame[12] = x ^ 0xBD;  // pour trame CD (commande)
-```
-
-### Cycle de trames (normal, ~160ms/cycle)
-
-```
-DD → CC → D2 → CC → D0 → (répéter)
+frame[12] = x ^ 0xBD;  // trame CD (commande)
 ```
 
 ### Envoi d'une commande
 
-1. Attendre la réception d'une trame `CC`
-2. Copier la trame `CC` dans un buffer
-3. Modifier `frame[0]=0xCD`, `frame[2]=consigne`, `frame[7]=flag`
-4. Recalculer le CRC
-5. Passer DE/RE HIGH, envoyer, repasser LOW
+```
+1. Attendre réception trame CC
+2. Copier la trame CC dans un buffer
+3. frame[0] = 0xCD
+4. frame[2] = consigne
+5. frame[7] = flag (ON/OFF + mode)
+6. Recalculer CRC
+7. DE/RE = HIGH → envoyer 13 bytes → DE/RE = LOW
+```
 
 ---
 
-## ⚙️ Installation ESPHome
+## ⚙️ Installation depuis les sources
 
 ### Prérequis
-- Home Assistant avec l'addon ESPHome installé
-- Accès à l'éditeur de fichiers HA (addon File Editor)
+- Home Assistant avec l'addon **ESPHome**
+- Addon **File Editor**
 
 ### Structure des fichiers
 
@@ -138,100 +175,63 @@ DD → CC → D2 → CC → D0 → (répéter)
     └── arroka/
         ├── __init__.py        ← fichier vide obligatoire
         ├── climate.py         ← composant Python ESPHome
-        └── arroka_climate.h   ← code C++ de contrôle
+        └── arroka_climate.h   ← code C++ de contrôle RS485
 ```
 
-### Étape 1 — Copier les fichiers
+### Étapes
 
-Via l'addon **File Editor** de Home Assistant, créez les fichiers suivants depuis le dossier [`esphome/`](esphome/) de ce dépôt.
-
-### Étape 2 — Configurer le WiFi
-
-Dans `arroka-pac.yaml`, remplacez :
-```yaml
-wifi:
-  ssid: "VotreSSID"
-  password: "VotreMotDePasse"
-```
-
-### Étape 3 — Compiler et flasher
-
-1. Dans le dashboard ESPHome, cliquez **"Install"**
-2. Choisissez **"Manual download"** → **"Factory format"**
-3. Flashez via https://web.esphome.io (branchez l'ESP32 en USB)
-
-### Étape 4 — Intégrer dans Home Assistant
-
-L'appareil sera découvert automatiquement. Ajoutez-le via **Paramètres → Appareils et services → ESPHome**.
-
----
-
-## 🏠 Résultat dans Home Assistant
-
-Une entité **Climate** apparaît avec :
-
-```
-┌─────────────────────────────────────┐
-│  🌊 PAC Piscine                      │
-│                                      │
-│  Actuel : 17°C  ──►  Cible : 28°C  │
-│                                      │
-│  ❄️ COOL    🔥 HEAT    ⏸ OFF        │
-│                                      │
-│  Action : CHAUFFAGE EN COURS         │
-└─────────────────────────────────────┘
-```
+1. Copiez les fichiers du dossier [`esphome/`](esphome/) dans `/config/esphome/` via File Editor
+2. Dans `arroka-pac.yaml`, remplacez `VotreSSID` et `VotreMotDePasse`
+3. Dans ESPHome, **Install → Manual download → Factory format**
+4. Flashez via https://web.esphome.io
 
 ---
 
 ## 🔧 Sketch Arduino de diagnostic
 
-Le dossier [`arduino/arroka_debug/`](arduino/arroka_debug/) contient un sketch Arduino standalone permettant de :
-- Sniffer le bus RS485 sans ESPHome
-- Décoder les trames en temps réel
-- Envoyer des commandes manuelles via le moniteur série
+Le fichier [`arduino/arroka_debug/arroka_debug.ino`](arduino/arroka_debug/arroka_debug.ino) permet de tester sans ESPHome.
 
-### Commandes disponibles
+Ouvrez le moniteur série (**9600 baud, Both NL & CR**) et tapez :
 
 | Commande | Action |
 |----------|--------|
+| `STATUS` | Affiche température, consigne, mode |
 | `ON` | Allume la PAC |
 | `OFF` | Éteint la PAC |
-| `HEAT` | Passe en mode chauffage |
-| `COOL` | Passe en mode refroidissement |
-| `SET 28` | Change la consigne à 28°C |
-| `STATUS` | Affiche l'état actuel |
+| `HEAT` | Mode chauffage |
+| `COOL` | Mode refroidissement |
+| `SET 28` | Consigne à 28°C (15–32) |
 
 ---
 
 ## ❓ FAQ
 
 **Q : Compatible avec d'autres modèles ?**  
-R : Potentiellement compatible avec toutes les PAC ByPiscine / Pool Comfort commercialisées avant 2023 (avant l'intégration WiFi native). Les modèles post-2023 ont le WiFi intégré.
+R : Potentiellement compatible avec toutes les PAC ByPiscine / Pool Comfort **avant 2023**. Les modèles post-2023 ont le WiFi intégré de série.
 
 **Q : Risque de casser la PAC ?**  
-R : L'ESP32 est en **écoute passive** sur le bus. Il n'injecte des trames que ponctuellement pour les commandes, en copiant exactement le format du boîtier physique. Le boîtier physique continue de fonctionner normalement.
-
-**Q : Faut-il couper l'alimentation pour installer ?**  
-R : Oui, coupez l'alimentation de la PAC avant de brancher les fils sur CN8.
+R : L'ESP32 est en écoute passive. Il n'injecte des trames que ponctuellement, en copiant exactement le format du boîtier physique. Le boîtier continue de fonctionner normalement.
 
 **Q : Le boîtier physique continue de fonctionner ?**  
-R : Oui, les deux contrôles (ESP32 et boîtier) coexistent. Le dernier à envoyer une commande gagne.
+R : Oui, les deux contrôles coexistent. Le dernier à envoyer une commande est prioritaire.
+
+**Q : Quelle alimentation ?**  
+R : Un chargeur USB **5V/1A** suffit (chargeur de téléphone ancien). Le câble doit être **data+charge**.
 
 ---
 
 ## 📜 Licence
 
-MIT License — libre d'utilisation, modification et redistribution.
+MIT — Libre d'utilisation, modification et redistribution.
 
 ---
 
 ## 🤝 Contribution
 
-Les PR sont les bienvenues ! En particulier :
-- Tests sur d'autres modèles de PAC ByPiscine
-- Intégration avec d'autres systèmes domotique (Jeedom, Domoticz...)
-- Amélioration de la documentation
+Les PR sont bienvenues ! En particulier :
+- Tests sur d'autres modèles ByPiscine
+- Intégration Jeedom, Domoticz...
+- Photos de câblage
 
 ---
 
