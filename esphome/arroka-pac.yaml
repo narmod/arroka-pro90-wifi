@@ -1,0 +1,47 @@
+esphome:
+  name: arroka-pac
+  friendly_name: PAC Piscine
+
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: arduino
+
+# Désactive le logger sur UART0 pour éviter les conflits
+logger:
+  baud_rate: 0
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "VotreSSID"        # ← Remplacez par votre SSID
+  password: "VotreMotDePasse"  # ← Remplacez par votre mot de passe
+  ap:
+    ssid: "Arroka Fallback"
+    password: "arroka1234"
+
+captive_portal:
+
+# Composant custom local
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [arroka]
+
+# UART RS485 — GPIO16=RX2, GPIO17=TX2
+uart:
+  id: rs485_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+
+# Entité Climate Home Assistant
+climate:
+  - platform: arroka
+    name: "PAC Piscine"
+    uart_id: rs485_uart
+    de_re_pin: 4   # GPIO4 = broche DE/RE du MAX485
