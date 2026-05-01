@@ -2,7 +2,7 @@
 
 Ajout du contrôle WiFi à une pompe à chaleur piscine **Arroka Pro 90** (ByPiscine, 2022) via un ESP32 connecté au bus RS485 de la carte mère, intégré dans **Home Assistant** via **ESPHome**.
 
-> ✅ Testé sur carte mère ref. `1.35.1010095` datée `2022-03-23`  
+> ✅ Testé sur carte mère ESP32-VROOM-32 ref. `1.35.1010095` datée `2022-03-23`  
 > 📌 Probablement compatible avec toutes les PAC ByPiscine / Pool Comfort **avant 2023** (sans WiFi intégré)
 
 ---
