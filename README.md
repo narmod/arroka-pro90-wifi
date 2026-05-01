@@ -74,6 +74,9 @@ L'appareil est découvert automatiquement :
 > Il expose 4 bornes : **B, A, GND, +12V** (de gauche à droite).
 
 ### Schéma de connexion
+<p align="center">
+  <img src="docs/images/schema1.png" width="600" alt="Schema1"/>
+</p>
 
 ```
 PAC CN8          MAX485              ESP32 AZ-Delivery
@@ -90,6 +93,10 @@ GND         ───► GND ◄────────────── GND
                  DE+RE ◄──────────── GPIO4
 ```
 
+
+<p align="center">
+  <img src="docs/images/schema2.png" width="600" alt="Schema2"/>
+</p>
 > ⚠️ **IMPORTANT** : Ne **jamais** brancher le +12V de la PAC sur le MAX485.  
 > Le MAX485 est alimenté en **5V** uniquement depuis la broche `U5` de l'ESP32.  
 > ⚠️ Coupez l'alimentation de la PAC avant de brancher les fils sur CN8.
