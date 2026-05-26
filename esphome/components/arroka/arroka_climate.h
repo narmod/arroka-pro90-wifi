@@ -27,7 +27,7 @@ class ArrokaClimate : public climate::Climate,
 
   climate::ClimateTraits traits() override {
     auto t = climate::ClimateTraits();
-    t.set_supports_current_temperature(true);
+    // set_supports_current_temperature supprimé dans ESPHome 2026.5.x
     t.set_supported_modes({
       climate::CLIMATE_MODE_OFF,
       climate::CLIMATE_MODE_HEAT,
@@ -162,7 +162,7 @@ class ArrokaClimate : public climate::Climate,
 
   void send_command(bool on, bool heat, uint8_t sp) {
     if (!last_cc_valid_) {
-      ESP_LOGW(TAG, "Pas de trame CC connue, commande annulee");
+      ESP_LOGW(TAG, "Pas de trame CC, commande annulée");
       return;
     }
     uint8_t frame[13];
